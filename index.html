@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Missão Numberblocks</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Nunito:ital,wght@0,400;0,700;0,900;1,900&display=swap" rel="stylesheet" />
+  <style>
+    * { font-family: 'Nunito', sans-serif; }
+    @keyframes nb-bounce { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-18px)} }
+    @keyframes nb-fade   { from{opacity:0} to{opacity:1} }
+    @keyframes nb-zoom   { from{opacity:0;transform:scale(.92)} to{opacity:1;transform:scale(1)} }
+    @keyframes nb-slide  { from{opacity:0;transform:translateX(28px)} to{opacity:1;transform:translateX(0)} }
+    @keyframes nb-up     { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes nb-pulse  { 0%,100%{opacity:1} 50%{opacity:.45} }
+    @keyframes nb-spin   { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    @keyframes nb-pop    { 0%{transform:scale(1)} 50%{transform:scale(1.18)} 100%{transform:scale(1)} }
+    .anim-fade  { animation: nb-fade  .35s ease both }
+    .anim-zoom  { animation: nb-zoom  .35s ease both }
+    .anim-slide { animation: nb-slide .4s  ease both }
+    .anim-up    { animation: nb-up    .35s ease both }
+    .anim-pulse { animation: nb-pulse 1.6s ease-in-out infinite }
+    .anim-spin  { animation: nb-spin  .9s  linear infinite }
+    .anim-pop   { animation: nb-pop   .4s  ease }
+    .bounce-1   { animation: nb-bounce 1s .0s infinite }
+    .bounce-2   { animation: nb-bounce 1s .2s infinite }
+    .bounce-3   { animation: nb-bounce 1s .4s infinite }
+    .btn-press:active { transform: scale(.95) }
+    select { -webkit-appearance:none; appearance:none; }
+    .input { width:100%; padding:1rem; background:#f9fafb; border:2px solid #e5e7eb; border-radius:1rem; font-weight:700; font-size:1.1rem; outline:none; transition:border-color .2s; }
+    .input:focus { border-color:#3b82f6; }
+  </style>
+</head>
+<body class="bg-[#EFF8FF] min-h-screen">
+  <div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+/* ─── PALETA ─────────────────────────────────────────── */
+const C = { 1:'#FF4D4D', 2:'#FF9A3C', 3:'#FFD600', 4:'#3B82F6', 5:'#A855F7' };
+
+/* ─── HELPERS ────────────────────────────────────────── */
+const norm = v => String(v).toLowerCase()
+  .replace(/r\$/g,'').replace(/\s/g,'').replace(/[a-zà-ÿ]/g,'')
+  .replace(/\./g,'').replace(/,/g,'.').trim();
+
+const compareAnswers = (u, e) => {
+  if (!u || !e) return false;
+  const un = norm(u), en = norm(e);
+  if (!isNaN(un) && !isNaN(en) && un !== '' && en !== '')
+    return parseFloat(un) === parseFloat(en);
+  return un === en;
+};
+
+const fmtTime = s => `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+
+/* ─── LOADING ────────────────────────────────────────── */
+function LoadingScreen({ msg = 'A Preparar Missão...' }) {
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen text-center space-y-8 anim-fade p-6">
+      <div className="flex gap-4">
+        {[C[1], C[2], C[3]].map((bg, i) => (
+          <div key={i} className={`w-14 h-14 rounded-xl shadow-lg bounce-${i+1}`} style={{backgroundColor:bg}} />
+        ))}
+      </div>
+      <h2 className="text-3xl font-black text-blue-600 uppercase tracking-tight">{msg}</h2>
+      <p className="text-gray-400 font-bold italic text-lg">"O Numberblocks está preparando a sua Missão"</p>
+    </div>
+  );
+}
+
+/* ─── COUNTDOWN ─────────────────────────────────────── */
+function CountdownScreen({ count }) {
+  const map = {
+    5:{bg:C[5],txt:'CINCO!'}, 4:{bg:C[4],txt:'QUATRO!'},
+    3:{bg:C[3],txt:'TRÊS!'}, 2:{bg:C[2],txt:'DOIS!'},
+    1:{bg:C[1],txt:'UM!'}, 0:{bg:'#22C55E',txt:'JÁ!'}
+  };
+  const { bg, txt } = map[count] || map[1];
+  return (
+    <div className="flex flex-col items-center justify-center min-h-screen space-y-10 anim-fade text-center">
+      <div className="w-60 h-60 sm:w-72 sm:h-72 rounded-[60px] flex items-center justify-center text-white font-black shadow-2xl anim-pop"
+        style={{backgroundColor:bg, fontSize: count === 0 ? '5rem' : '7rem'}}>
+        {count === 0 ? '🚀' : count}
+      </div>
+      <h2 className="text-6xl font-black uppercase tracking-tighter anim-pulse" style={{color:bg}}>{txt}</h2>
+    </div>
+  );
+}
+
+/* ─── SETUP ─────────────────────────────────────────── */
+function SetupScreen({ cfg, setCfg, onNext }) {
+  return (
+    <div className="max-w-md mx-auto px-4 py-8 space-y-6 anim-fade text-center">
+      <h1 className="text-5xl font-black text-blue-600 uppercase tracking-tighter italic leading-none">
+        Missão<br/><span className="text-yellow-400">Numberblocks</span>
+      </h1>
+      <div className="bg-white p-8 rounded-[40px] shadow-2xl border-b-8 border-blue-100 text-left space-y-5">
+        <Field label="Nome do Herói">
+          <input type="text" className="input" value={cfg.name}
+            onChange={e => setCfg({...cfg, name: e.target.value})}
+            placeholder="Escreve o teu nome" />
+        </Field>
+        <div className="grid grid-cols-2 gap-4">
+          <Field label="Série">
+            <select className="input" value={cfg.year} onChange={e => setCfg({...cfg, year:e.target.value})}>
+              {[1,2,3,4,5].map(y => <option key={y} value={y}>{y}º Ano</option>)}
+            </select>
+          </Field>
+          <Field label="Nível">
+            <select className="input" value={cfg.difficulty} onChange={e => setCfg({...cfg, difficulty:e.target.value})}>
+              <option>Fácil</option><option>Médio</option><option>Difícil</option>
+            </select>
+          </Field>
+        </div>
+        <Field label="Tema de Estudo">
+          <input type="text" className="input" value={cfg.content}
+            onChange={e => setCfg({...cfg, content:e.target.value})}
+            placeholder="Ex: Divisão, Frações, Geometria..." />
+        </Field>
+        <button
+          disabled={!cfg.name.trim() || !cfg.content.trim()}
+          onClick={onNext}
+          className="w-full bg-blue-500 disabled:opacity-40 text-white py-5 rounded-3xl font-black text-2xl shadow-xl hover:bg-blue-600 uppercase tracking-widest btn-press transition-colors">
+          Iniciar Aventura ✨
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── ORIENTATION ────────────────────────────────────── */
+function OrientationScreen({ name, onConfirm }) {
+  return (
+    <div className="max-w-md mx-auto px-4 py-10 anim-zoom text-center">
+      <div className="bg-white p-10 rounded-[50px] shadow-2xl border-b-8 border-purple-200 space-y-7">
+        <h2 className="text-3xl font-black text-purple-600 uppercase italic leading-tight">Ferramentas de Herói!</h2>
+        <div className="grid grid-cols-3 gap-4">
+          {[['✏️','Lápis'],['🗑️','Borracha'],['📓','Caderno']].map(([e,l]) => (
+            <div key={l} className="flex flex-col items-center gap-2">
+              <span className="text-5xl">{e}</span>
+              <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">{l}</span>
+            </div>
+          ))}
+        </div>
+        <p className="text-xl font-bold text-gray-500">Já tens tudo pronto, <span className="text-blue-600 font-black">{name}</span>?</p>
+        <button onClick={onConfirm}
+          className="w-full bg-green-500 text-white py-6 rounded-3xl font-black text-2xl shadow-xl uppercase tracking-widest btn-press hover:bg-green-600 transition-colors">
+          Tudo Pronto! 🎯
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── MISSION SCREEN ─────────────────────────────────── */
+function MissionScreen({ cfg, data, timer, currentPhase, setCurrentPhase, revealed, setRevealed,
+  simuladoAnswers, setSimuladoAnswers, simuladoResults, setSimuladoResults,
+  reinforcementData, reinforcementAnswers, setReinforcementAnswers, isReforcoLoading,
+  onGenerateReinforcement, onFinish }) {
+
+  const phases = [
+    { title:'Aquecimento',           icon:'🎮', color:C[1] },
+    { title:'Exploração Visual',     icon:'📖', color:C[4] },
+    { title:'Pensamento Matemático', icon:'🎯', color:C[5] },
+    { title:'Desafio Final',         icon:'🏆', color:C[3] },
+  ];
+  const p = phases[currentPhase];
+  const toggle = key => setRevealed(r => ({...r, [key]: !r[key]}));
+
+  return (
+    <div className="max-w-3xl mx-auto space-y-5 pb-28 anim-slide px-4">
+
+      {/* HUD */}
+      <div className="bg-white p-5 rounded-[28px] shadow-md flex justify-between items-center border-b-4 border-gray-100">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center text-2xl shadow"
+            style={{backgroundColor:p.color}}>{p.icon}</div>
+          <div>
+            <h3 className="font-black text-gray-700 uppercase text-sm leading-none">{p.title}</h3>
+            <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1">Fase {currentPhase+1} de 4</p>
+          </div>
+        </div>
+        <div className="bg-blue-50 px-4 py-2 rounded-xl flex items-center gap-2 border border-blue-100">
+          <span className="text-blue-500 text-lg">⏱</span>
+          <span className="font-mono font-black text-blue-600 text-lg">{fmtTime(timer)}</span>
+        </div>
+      </div>
+
+      <div className="bg-white p-6 sm:p-10 rounded-[48px] shadow-2xl min-h-[480px]">
+
+        {/* FASE 0 — AQUECIMENTO */}
+        {currentPhase === 0 && (
+          <div className="space-y-6">
+            <div className="flex items-center gap-4 bg-red-50 p-6 rounded-[28px] border-l-8 border-red-400">
+              <div className="w-12 h-12 bg-red-500 rounded-xl text-white font-black text-2xl flex items-center justify-center shadow">1</div>
+              <p className="font-bold text-red-800 italic text-lg leading-snug">
+                "Olá, {cfg.name}! Vamos esticar o cérebro com o UM!"
+              </p>
+            </div>
+            {data.aquecimento.map((item, i) => (
+              <div key={i} className="bg-gray-50 p-6 rounded-3xl border-2 border-gray-100">
+                <div className="flex justify-between items-center gap-4">
+                  <span className="text-2xl font-black text-gray-700 flex-1">{item.q}</span>
+                  <button onClick={() => toggle(`aq-${i}`)}
+                    className="bg-red-500 text-white px-6 py-3 rounded-2xl font-black uppercase text-xs shadow-md hover:bg-red-600 btn-press flex-shrink-0 transition-colors">
+                    {revealed[`aq-${i}`] ? 'Ocultar' : 'Pensar! 💡'}
+                  </button>
+                </div>
+                {revealed[`aq-${i}`] && (
+                  <div className="mt-4 p-5 bg-white rounded-2xl border-2 border-red-100 anim-up">
+                    <p className="text-3xl font-black text-red-600 mb-1">Resultado: {item.a}</p>
+                    <p className="text-gray-500 font-bold">{item.dica}</p>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* FASE 1 — EXPLORAÇÃO VISUAL */}
+        {currentPhase === 1 && (
+          <div className="space-y-8">
+            <div className="bg-blue-50 p-7 rounded-[36px] border-l-[10px] border-blue-400 flex items-center gap-5">
+              <span className="text-5xl">🔷</span>
+              <div>
+                <h3 className="text-3xl font-black text-blue-700 uppercase tracking-tight leading-none">{data.revisao.titulo}</h3>
+                <p className="font-bold text-blue-800 italic mt-2 text-lg">"Sou o QUATRO! Organizar é o meu super-poder!"</p>
+              </div>
+            </div>
+            <div className="grid md:grid-cols-2 gap-6">
+              {['estrategia1','estrategia2'].map((key) => (
+                <div key={key} className="bg-white p-8 rounded-[44px] border-4 border-blue-100 shadow-xl">
+                  <h4 className="font-black text-blue-600 text-xl mb-4 flex items-center gap-2 uppercase">
+                    <span>📐</span> {data.revisao[key].nome}
+                  </h4>
+                  <p className="text-gray-600 font-bold leading-relaxed mb-5 bg-blue-50/60 p-4 rounded-2xl">
+                    {data.revisao[key].desc}
+                  </p>
+                  <div className="space-y-3">
+                    {data.revisao[key].passos_visuais?.map((passo, pi) => (
+                      <div key={pi} className="flex gap-3 items-start anim-up" style={{animationDelay:`${pi*.08}s`}}>
+                        <div className="w-8 h-8 rounded-lg bg-blue-500 flex items-center justify-center text-white font-black text-sm flex-shrink-0 shadow">{pi+1}</div>
+                        <p className="text-blue-900 font-bold text-sm bg-blue-50 px-4 py-2 rounded-xl flex-1">{passo}</p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* FASE 2 — PROBLEMAS */}
+        {currentPhase === 2 && (
+          <div className="space-y-7">
+            <div className="bg-purple-50 p-6 rounded-3xl border-l-8 border-purple-400 flex items-center gap-4">
+              <div className="w-14 h-14 bg-purple-500 rounded-xl text-white font-black text-2xl flex items-center justify-center shadow-lg">5</div>
+              <p className="font-bold text-purple-800 text-lg italic">"CINCO! Vamos desvendar o caminho para a solução!"</p>
+            </div>
+            <p className="text-xs font-black text-gray-300 uppercase text-center tracking-widest">4 Mistérios para Resolver</p>
+            {data.problemas.map((prob, i) => (
+              <div key={i} className="bg-white p-8 rounded-[40px] border-4 border-purple-50 shadow-xl">
+                <h4 className="text-2xl font-black text-purple-700 mb-3 uppercase tracking-tight">{prob.titulo}</h4>
+                <p className="text-gray-700 font-bold leading-relaxed text-lg mb-5">{prob.texto}</p>
+                <button onClick={() => toggle(`pr-${i}`)}
+                  className="w-full bg-purple-500 text-white py-5 rounded-3xl font-black uppercase tracking-widest btn-press shadow-lg hover:bg-purple-600 transition-colors">
+                  {revealed[`pr-${i}`] ? 'Ocultar Lógica 🙈' : 'Ver Pensamento Matemático 🧠'}
+                </button>
+                {revealed[`pr-${i}`] && (
+                  <div className="mt-5 p-7 bg-purple-50 rounded-[32px] border-2 border-purple-100 anim-zoom">
+                    <div className="text-purple-800 font-bold space-y-3">
+                      {prob.solucao_passos?.map((s, si) => (
+                        <div key={si} className="flex gap-2">
+                          <span className="text-purple-400 font-black">Passo {si+1}:</span>
+                          <span>{s}</span>
+                        </div>
+                      ))}
+                      <p className="mt-4 pt-4 border-t border-purple-200 text-2xl font-black text-green-600">
+                        ✅ Resultado: {prob.res_final}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* FASE 3 — SIMULADO */}
+        {currentPhase === 3 && (
+          <div className="space-y-7">
+            <div className="text-center space-y-2">
+              <div className="text-8xl anim-pulse">⭐</div>
+              <h3 className="text-5xl font-black text-blue-600 uppercase tracking-tighter italic leading-none">O Grande Desafio!</h3>
+              <p className="text-gray-400 font-black uppercase tracking-widest text-xs">5 Provas para a tua Estrela!</p>
+            </div>
+            <div className="space-y-6">
+              {data.simulado.map((q, i) => (
+                <div key={i} className="bg-gray-50 p-8 rounded-[40px] border-2 border-gray-100 shadow-sm hover:border-blue-200 transition-colors">
+                  <p className="text-2xl font-black text-gray-700 mb-6">{q.q}</p>
+                  {simuladoResults ? (
+                    <div className={`p-6 rounded-[28px] border-2 anim-up ${simuladoResults[i].correct ? 'bg-green-50 border-green-200 text-green-700' : 'bg-red-50 border-red-200 text-red-700'}`}>
+                      <div className="flex items-center gap-3 font-black text-xl mb-3">
+                        <span>{simuladoResults[i].correct ? '✅' : '❌'}</span>
+                        {simuladoResults[i].correct ? 'Correto! Incrível!' : 'Ups! Quase lá!'}
+                      </div>
+                      <div className="bg-white/60 p-4 rounded-2xl">
+                        <p className="text-xs font-black uppercase text-gray-400 mb-2 tracking-widest">Caminho da Lógica:</p>
+                        {q.pensamento?.map((step, si) => (
+                          <p key={si} className="text-sm font-bold text-gray-600 mb-1">🔸 {step}</p>
+                        ))}
+                        <p className="mt-4 font-black text-lg">Resposta: {q.ans}</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <input type="text" placeholder="Escreve o resultado..."
+                        className="w-full p-6 bg-white border-2 rounded-2xl font-black text-blue-600 text-2xl outline-none focus:border-blue-400 shadow-inner"
+                        value={simuladoAnswers[i] || ''}
+                        onChange={e => setSimuladoAnswers({...simuladoAnswers, [i]: e.target.value})} />
+                      <p className="text-[10px] text-gray-400 font-bold uppercase ml-2">ℹ️ Só precisas do número!</p>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {/* REFORÇO */}
+            {simuladoResults && reinforcementData && (
+              <div className="mt-10 pt-10 border-t-8 border-dashed border-gray-100 space-y-6 anim-fade">
+                <div className="bg-orange-100 p-8 rounded-[40px] text-center border-b-8 border-orange-200">
+                  <h4 className="text-3xl font-black text-orange-700 uppercase tracking-tight italic">🚀 Missão de Reforço!</h4>
+                  <p className="text-orange-800 font-bold mt-1 uppercase text-xs tracking-widest">Tenta estes desafios para aprenderes melhor!</p>
+                </div>
+                {reinforcementData.questions.map((q, i) => (
+                  <div key={i} className="bg-orange-50 p-8 rounded-[35px] border-2 border-orange-100 shadow-inner">
+                    <p className="font-black text-gray-700 mb-4 text-xl">{q.q}</p>
+                    <div className="flex gap-3 mb-4">
+                      <input type="text" placeholder="Novo resultado..."
+                        className="flex-1 p-4 bg-white border-2 rounded-2xl font-bold text-orange-600 text-xl outline-none focus:border-orange-400"
+                        value={reinforcementAnswers[i] || ''}
+                        onChange={e => setReinforcementAnswers({...reinforcementAnswers, [i]: e.target.value})} />
+                      <button onClick={() => toggle(`ref-${i}`)}
+                        className="bg-orange-400 text-white p-4 rounded-2xl hover:bg-orange-500 btn-press transition-colors shadow-md text-xl">
+                        💡
+                      </button>
+                    </div>
+                    {revealed[`ref-${i}`] && (
+                      <div className="bg-white p-6 rounded-2xl border-2 border-orange-200 anim-zoom">
+                        <p className="text-xs font-black text-orange-400 uppercase mb-3 tracking-widest italic">O Numberblock ajuda:</p>
+                        {q.pensamento?.map((step, si) => (
+                          <p key={si} className="text-sm font-bold text-orange-800 mb-1">✨ {step}</p>
+                        ))}
+                        <p className="mt-4 font-black text-orange-900 border-t border-orange-100 pt-2">Resposta Correta: {q.ans}</p>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="space-y-4 pt-4">
+              {!simuladoResults ? (
+                <button onClick={() => {
+                  const res = data.simulado.map((q, i) => ({
+                    correct: compareAnswers(simuladoAnswers[i], q.ans), q: q.q
+                  }));
+                  setSimuladoResults(res);
+                  const missed = res.filter(r => !r.correct);
+                  if (missed.length > 0) onGenerateReinforcement(missed);
+                }} className="w-full bg-yellow-400 text-white py-7 rounded-[40px] font-black text-4xl shadow-xl border-b-8 border-yellow-600 uppercase tracking-tight btn-press hover:bg-yellow-500 transition-colors">
+                  Verificar Desafio! 🎯
+                </button>
+              ) : (
+                <button onClick={onFinish}
+                  className="w-full bg-blue-500 text-white py-6 rounded-full font-black text-2xl shadow-xl uppercase tracking-widest btn-press hover:bg-blue-600 transition-colors">
+                  Finalizar Missão 🏆
+                </button>
+              )}
+              {isReforcoLoading && (
+                <div className="flex justify-center items-center gap-3 text-orange-500 font-black italic anim-pulse">
+                  <span className="anim-spin inline-block">⏳</span> O Numberblock está a criar novos desafios...
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* NAVEGAÇÃO */}
+      <div className="flex justify-between items-center px-2">
+        <button disabled={currentPhase === 0 || !!simuladoResults}
+          onClick={() => { setCurrentPhase(p => p-1); window.scrollTo(0,0); }}
+          className="flex items-center gap-2 text-gray-400 font-bold uppercase text-xs disabled:opacity-0 hover:text-blue-500 btn-press transition-colors">
+          ← Voltar
+        </button>
+        {currentPhase < 3 && (
+          <button onClick={() => { setCurrentPhase(p => p+1); window.scrollTo(0,0); }}
+            className="bg-blue-600 text-white px-10 py-5 rounded-full font-black shadow-lg uppercase tracking-wider btn-press hover:bg-blue-700 transition-colors flex items-center gap-2">
+            Próximo Nível →
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── MURAL ──────────────────────────────────────────── */
+function MuralScreen({ score, timer, cfg, mural, onNew }) {
+  const stars = score >= 91 ? 5 : score >= 80 ? 4 : score >= 60 ? 3 : score >= 40 ? 2 : 1;
+  return (
+    <div className="max-w-3xl mx-auto px-4 py-8 space-y-8 anim-zoom text-center pb-20">
+      <div className="bg-white p-12 sm:p-16 rounded-[64px] shadow-2xl border-b-[14px] border-yellow-200">
+        <div className="text-9xl anim-pop mb-4">🏆</div>
+        <h2 className="text-6xl sm:text-8xl font-black text-blue-600 uppercase italic tracking-tighter leading-none mb-2">Vitória!</h2>
+        <p className="text-2xl font-black text-gray-400 mb-8 uppercase italic">{cfg.name}, és um Herói!</p>
+        <div className="flex justify-center gap-3 mb-10">
+          {[1,2,3,4,5].map(i => (
+            <span key={i} className="text-5xl" style={{filter: i <= stars ? 'none' : 'grayscale(1) opacity(.2)'}}>⭐</span>
+          ))}
+        </div>
+        <div className="grid grid-cols-2 gap-5 mb-10">
+          <div className="bg-blue-50 p-8 rounded-[36px] border-2 border-blue-100">
+            <p className="text-xs font-black text-blue-400 uppercase tracking-widest mb-1">Resultado</p>
+            <p className="text-6xl font-black text-blue-600 leading-none">{score}%</p>
+          </div>
+          <div className="bg-purple-50 p-8 rounded-[36px] border-2 border-purple-100">
+            <p className="text-xs font-black text-purple-400 uppercase tracking-widest mb-1">Tempo Total</p>
+            <p className="text-3xl font-black text-purple-600">{fmtTime(timer)}</p>
+          </div>
+        </div>
+        <button onClick={onNew}
+          className="bg-blue-600 text-white px-14 py-6 rounded-full font-black text-3xl shadow-xl uppercase tracking-widest btn-press hover:bg-blue-700 transition-colors">
+          Nova Missão 🧩
+        </button>
+      </div>
+
+      {mural.length > 0 && (
+        <div className="bg-white p-8 rounded-[48px] shadow-xl text-left space-y-4">
+          <h3 className="text-2xl font-black text-yellow-500 uppercase tracking-tight text-center mb-2">🏅 Quadro de Heróis</h3>
+          {mural.slice(0,8).map((entry, i) => (
+            <div key={i} className="flex items-center justify-between bg-gray-50 p-5 rounded-3xl border-2 border-gray-100 anim-up" style={{animationDelay:`${i*.05}s`}}>
+              <div className="flex items-center gap-4">
+                <div className="w-10 h-10 rounded-xl bg-blue-500 text-white font-black flex items-center justify-center shadow text-sm">{i+1}</div>
+                <div>
+                  <p className="font-black text-gray-700">{entry.name}</p>
+                  <p className="text-xs text-gray-400 font-bold">{entry.year}º Ano · {fmtTime(entry.time)}</p>
+                </div>
+              </div>
+              <div className="text-right">
+                <p className="text-2xl font-black text-blue-600">{entry.score}%</p>
+                <p className="text-sm">{'⭐'.repeat(entry.stars)}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── FIELD HELPER ───────────────────────────────────── */
+function Field({ label, children }) {
+  return (
+    <div>
+      <label className="text-[10px] font-black text-gray-400 ml-2 uppercase tracking-widest block mb-1">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+/* ─── APP ────────────────────────────────────────────── */
+function App() {
+  const [screen, setScreen]         = useState('setup');
+  const [cfg, setCfg]               = useState({ name:'', year:'5', content:'', difficulty:'Médio' });
+  const [missionData, setMission]   = useState(null);
+  const [currentPhase, setPhase]    = useState(0);
+  const [revealed, setRevealed]     = useState({});
+  const [timer, setTimer]           = useState(0);
+  const [countdown, setCountdown]   = useState(5);
+  const [simAnswers, setSimAnswers] = useState({});
+  const [simResults, setSimResults] = useState(null);
+  const [reinforcement, setReinforcement] = useState(null);
+  const [refAnswers, setRefAnswers] = useState({});
+  const [refLoading, setRefLoading] = useState(false);
+  const [finalScore, setFinalScore] = useState(0);
+  const [mural, setMural] = useState(() => {
+    try { return JSON.parse(localStorage.getItem('nb_mural') || '[]'); } catch { return []; }
+  });
+
+  /* Timer */
+  useEffect(() => {
+    if (screen !== 'mission') return;
+    const id = setInterval(() => setTimer(t => t+1), 1000);
+    return () => clearInterval(id);
+  }, [screen]);
+
+  /* Countdown */
+  useEffect(() => {
+    if (screen !== 'countdown') return;
+    if (countdown > 0) {
+      const id = setTimeout(() => setCountdown(c => c-1), 1000);
+      return () => clearTimeout(id);
+    }
+    setScreen('loading');
+    generateMission();
+  }, [screen, countdown]);
+
+  /* Proxy seguro — chama /api/claude no Netlify */
+  const callClaude = async (system, userMsg, maxTokens = 3000) => {
+    const res = await fetch('/api/claude', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ system, messages: [{ role:'user', content: userMsg }], max_tokens: maxTokens })
+    });
+    const data = await res.json();
+    if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
+    return data.content[0].text;
+  };
+
+  const parseJSON = raw => {
+    const cleaned = raw.replace(/```json\s*/g,'').replace(/```\s*/g,'').trim();
+    return JSON.parse(cleaned);
+  };
+
+  /* Gerar missão */
+  const generateMission = async () => {
+    const system = `És o Professor Numberblock especialista na BNCC brasileira.
+Cria um roteiro pedagógico para o ${cfg.year}º ano sobre "${cfg.content}" no nível "${cfg.difficulty}".
+Use linguagem infantil, visual e motivadora.
+
+REGRAS OBRIGATÓRIAS:
+- aquecimento: EXATAMENTE 5 itens
+- problemas: EXATAMENTE 4 itens com solução passo a passo
+- simulado: EXATAMENTE 5 questões de avaliação
+
+Responde EXCLUSIVAMENTE com JSON válido (sem markdown, sem texto extra):
+{
+  "aquecimento": [{"q":"pergunta","a":"resposta","dica":"explicação visual"}],
+  "revisao": {
+    "titulo":"título do tema",
+    "estrategia1":{"nome":"","desc":"","passos_visuais":["passo 1","passo 2","passo 3"]},
+    "estrategia2":{"nome":"","desc":"","passos_visuais":["passo 1","passo 2","passo 3"]},
+    "exemplos":[{"ex":"","res":""}]
+  },
+  "problemas":[{"titulo":"","texto":"","solucao_passos":["passo 1","passo 2","passo 3"],"res_final":"","estrategia":""}],
+  "simulado":[{"q":"","pensamento":["Passo 1","Passo 2"],"ans":"APENAS_O_NUMERO","nivel":""}]
+}`;
+
+    try {
+      const raw = await callClaude(system, 'Gera a missão completa agora.');
+      setMission(parseJSON(raw));
+      setScreen('mission');
+    } catch(e) {
+      console.error(e);
+      alert('Erro ao gerar missão 😢\n' + e.message);
+      setScreen('setup');
+    }
+  };
+
+  /* Gerar reforço */
+  const generateReinforcement = async (errors) => {
+    setRefLoading(true);
+    const topics = errors.map(e => e.q).join('; ');
+    const system = `Gera 3 questões de REFORÇO para o ${cfg.year}º ano sobre: ${topics}.
+Questões completamente NOVAS. Explicação passo a passo detalhada.
+Responde EXCLUSIVAMENTE com JSON (sem markdown):
+{"questions":[{"q":"nova pergunta","pensamento":["Lógica 1","Lógica 2"],"ans":"APENAS_O_NUMERO"}]}`;
+    try {
+      const raw = await callClaude(system, 'Gera o reforço inédito agora.', 1500);
+      setReinforcement(parseJSON(raw));
+    } catch(e) { console.error(e); }
+    finally { setRefLoading(false); }
+  };
+
+  /* Finalizar */
+  const handleFinish = () => {
+    const correct = simResults.filter(r => r.correct).length;
+    const score   = Math.round((correct / missionData.simulado.length) * 100);
+    const stars   = score >= 91 ? 5 : score >= 80 ? 4 : score >= 60 ? 3 : score >= 40 ? 2 : 1;
+    setFinalScore(score);
+    const entry = { name:cfg.name, score, stars, time:timer, date:new Date().toISOString(), year:cfg.year };
+    const nm = [entry, ...mural].slice(0,20);
+    setMural(nm);
+    localStorage.setItem('nb_mural', JSON.stringify(nm));
+    setScreen('mural');
+  };
+
+  const handleNew = () => {
+    setScreen('setup'); setPhase(0); setSimResults(null);
+    setSimAnswers({}); setTimer(0); setReinforcement(null);
+    setRefAnswers({}); setCountdown(5); setRevealed({});
+  };
+
+  return (
+    <div className="min-h-screen bg-[#EFF8FF] p-4 overflow-x-hidden">
+      {screen === 'setup'       && <SetupScreen cfg={cfg} setCfg={setCfg} onNext={() => setScreen('orientation')} />}
+      {screen === 'orientation' && <OrientationScreen name={cfg.name} onConfirm={() => setScreen('countdown')} />}
+      {screen === 'countdown'   && <CountdownScreen count={countdown} />}
+      {screen === 'loading'     && <LoadingScreen />}
+      {screen === 'mission' && missionData && (
+        <MissionScreen
+          cfg={cfg} data={missionData} timer={timer}
+          currentPhase={currentPhase} setCurrentPhase={setPhase}
+          revealed={revealed} setRevealed={setRevealed}
+          simuladoAnswers={simAnswers} setSimuladoAnswers={setSimAnswers}
+          simuladoResults={simResults} setSimuladoResults={setSimResults}
+          reinforcementData={reinforcement}
+          reinforcementAnswers={refAnswers} setReinforcementAnswers={setRefAnswers}
+          isReforcoLoading={refLoading}
+          onGenerateReinforcement={generateReinforcement}
+          onFinish={handleFinish}
+        />
+      )}
+      {screen === 'mural' && (
+        <MuralScreen score={finalScore} timer={timer} cfg={cfg} mural={mural} onNew={handleNew} />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
+</body>
+</html>
